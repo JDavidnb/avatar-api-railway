@@ -3,11 +3,11 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 from .utils import ensure_dir, unique_workdir
-from .pipelines import sadtalker_generate, wav2lip_refine
+from .pipelines import sadtalker_generate, wav2lip_refine, still_video_from_image
 
-app = FastAPI(title='Audio→Vídeo Avatar API', version='1.0.0')
+app = FastAPI(title='Audio→Vídeo Avatar API', version='1.1.0')
 
-DEVICE = os.getenv('DEVICE', 'cpu')  # for Railway CPU
+DEVICE = os.getenv('DEVICE', 'cpu')  # Railway CPU por defecto
 PORT = int(os.getenv('PORT', '8000'))
 
 @app.get('/')
@@ -23,8 +23,14 @@ async def generate(
     image: UploadFile = File(...),
     audio: UploadFile = File(...),
     refine_lips: bool = Form(True),
-    fps: int = Form(25)
+    fps: int = Form(25),
+    prefer: str = Form('auto')  # 'auto' | 'sadtalker' | 'w2l'
 ):
+    """
+    prefer=auto  -> intenta SadTalker y si falla, cae a Wav2Lip-only.
+    prefer=sadtalker -> fuerza SadTalker (si falla, error).
+    prefer=w2l -> usa Wav2Lip-only (imagen->vídeo estático).
+    """
     work = unique_workdir()
     try:
         img_path = work / 'image.jpg'
@@ -37,7 +43,17 @@ async def generate(
         out_dir = work / 'out'
         ensure_dir(out_dir)
 
-        base_video = sadtalker_generate(img_path, au_path, out_dir, fps=fps, device=DEVICE)
+        base_video = None
+        if prefer == 'w2l':
+            base_video = still_video_from_image(img_path, au_path, out_dir, fps=fps)
+        else:
+            try:
+                base_video = sadtalker_generate(img_path, au_path, out_dir, fps=fps, device=DEVICE)
+            except Exception as e:
+                if prefer == 'sadtalker':
+                    raise
+                # fallback automático
+                base_video = still_video_from_image(img_path, au_path, out_dir, fps=fps)
 
         final_path = work / 'final.mp4'
         if refine_lips:
