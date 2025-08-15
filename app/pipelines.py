@@ -1,4 +1,4 @@
-import os, json, subprocess
+import os, json, subprocess, urllib.request
 from pathlib import Path
 from .utils import run, ensure_dir, ffmpeg_normalize_audio
 
@@ -30,10 +30,7 @@ def sadtalker_generate(image: Path, audio: Path, out_dir: Path, fps: int = 25, d
     return vids[0]
 
 def normalize_image_to_png(image: Path, out_dir: Path) -> Path:
-    """
-    Re-codifica cualquier imagen de entrada (jpg/png/webp/heic/lo que sea) a PNG.
-    Evita 'No JPEG data found in image'.
-    """
+    """Re-codifica cualquier imagen a PNG para evitar errores de decodificación."""
     ensure_dir(out_dir)
     norm_img = out_dir / "img.png"
     run([
@@ -45,10 +42,7 @@ def normalize_image_to_png(image: Path, out_dir: Path) -> Path:
     return norm_img
 
 def still_video_from_image(image: Path, audio: Path, out_dir: Path, fps: int = 25) -> Path:
-    """
-    Crea un vídeo estático (sin audio) a partir de una imagen con la misma duración que el audio.
-    Sirve como entrada para Wav2Lip cuando SadTalker falla/no está disponible.
-    """
+    """Crea un vídeo estático (sin audio) a partir de una imagen con la misma duración que el audio."""
     ensure_dir(out_dir)
     norm_img = normalize_image_to_png(image, out_dir)
 
@@ -70,15 +64,26 @@ def still_video_from_image(image: Path, audio: Path, out_dir: Path, fps: int = 2
     ])
     return out_video
 
+def ensure_wav2lip_weights() -> Path:
+    """Descarga wav2lip_gan.pth si no existe."""
+    ckpt = WAV2LIP / 'checkpoints' / 'wav2lip_gan.pth'
+    if ckpt.exists():
+        return ckpt
+    ckpt.parent.mkdir(parents=True, exist_ok=True)
+    url = 'https://github.com/Rudrabha/Wav2Lip/releases/download/v0.1/wav2lip_gan.pth'
+    try:
+        urllib.request.urlretrieve(url, str(ckpt))
+    except Exception as e:
+        raise RuntimeError(f'No pude descargar wav2lip_gan.pth: {e}')
+    return ckpt
+
 def wav2lip_refine(face_video: Path, audio: Path, out_path: Path, device: str = 'cpu') -> Path:
     """Refina sincronización labial con Wav2Lip."""
     tmp_dir = out_path.parent
     norm_audio = tmp_dir / 'audio_16k_ref.wav'
     ffmpeg_normalize_audio(audio, norm_audio, sr=16000)
 
-    ckpt = WAV2LIP / 'checkpoints' / 'wav2lip_gan.pth'
-    if not ckpt.exists():
-        raise RuntimeError('Falta checkpoints de Wav2Lip (wav2lip_gan.pth)')
+    ckpt = ensure_wav2lip_weights()
 
     if device == 'cpu':
         os.environ['CUDA_VISIBLE_DEVICES'] = ''
