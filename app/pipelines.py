@@ -81,11 +81,12 @@ def wav2lip_refine(face_video: Path, audio: Path, out_path: Path, device: str = 
         '--face', str(face_video),
         '--audio', str(norm_audio),
         '--outfile', str(out_path),
-        '--static',                # trate la cara como fija (foto)
-        '--resize_factor', '2',    # reduce resolución → detector más estable en CPU
-        '--pads', '0', '15', '0', '0',  # margen arriba para no recortar labios
-        '--nosmooth'               # evitar smoothing que a veces rompe en CPU
+        '--static', 'True',
+        '--resize_factor', '2',
+        '--pads', '0', '15', '0', '0',
+        '--nosmooth'
     ]
+
     run(cmd, cwd=WAV2LIP)
     return out_path
 
