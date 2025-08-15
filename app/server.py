@@ -27,9 +27,9 @@ async def generate(
     prefer: str = Form('auto')  # 'auto' | 'sadtalker' | 'w2l'
 ):
     """
-    prefer=auto  -> intenta SadTalker y si falla, cae a Wav2Lip-only.
+    prefer=auto   -> intenta SadTalker y, si falla, cae a Wav2Lip-only.
     prefer=sadtalker -> fuerza SadTalker (si falla, error).
-    prefer=w2l -> usa Wav2Lip-only (imagen->vídeo estático).
+    prefer=w2l   -> usa Wav2Lip-only (imagen->vídeo estático).
     """
     work = unique_workdir()
     try:
@@ -43,18 +43,18 @@ async def generate(
         out_dir = work / 'out'
         ensure_dir(out_dir)
 
-        base_video = None
+        # Base video
         if prefer == 'w2l':
             base_video = still_video_from_image(img_path, au_path, out_dir, fps=fps)
         else:
             try:
                 base_video = sadtalker_generate(img_path, au_path, out_dir, fps=fps, device=DEVICE)
-            except Exception as e:
+            except Exception:
                 if prefer == 'sadtalker':
                     raise
-                # fallback automático
                 base_video = still_video_from_image(img_path, au_path, out_dir, fps=fps)
 
+        # Refinado de labios (si se pide)
         final_path = work / 'final.mp4'
         if refine_lips:
             final_video = wav2lip_refine(base_video, au_path, final_path, device=DEVICE)
@@ -69,4 +69,3 @@ async def generate(
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run('app.server:app', host='0.0.0.0', port=PORT, reload=False)
-
