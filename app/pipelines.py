@@ -59,24 +59,33 @@ def still_video_from_image(image: Path, audio: Path, out_dir: Path, fps: int = 2
     return out_video
 
 def wav2lip_refine(face_video: Path, audio: Path, out_path: Path, device: str = 'cpu') -> Path:
-    """Refina sincronización labial con Wav2Lip."""
+    """Refina sincronización labial con Wav2Lip (modo robusto en CPU)."""
     tmp_dir = out_path.parent
     norm_audio = tmp_dir / 'audio_16k_ref.wav'
     ffmpeg_normalize_audio(audio, norm_audio, sr=16000)
 
-    ckpt = WAV2LIP / 'checkpoints' / 'wav2lip_gan.pth'
+    ckpt_gan = WAV2LIP / 'checkpoints' / 'wav2lip_gan.pth'
+    ckpt_base = WAV2LIP / 'checkpoints' / 'wav2lip.pth'
+    ckpt = ckpt_gan if ckpt_gan.exists() else ckpt_base  # usa base si no hay GAN
     if not ckpt.exists():
-        raise RuntimeError('Falta checkpoints de Wav2Lip (wav2lip_gan.pth)')
+        raise RuntimeError('Faltan pesos de Wav2Lip (ni wav2lip_gan.pth ni wav2lip.pth)')
 
+    # Forzar modo "static", bajar resolución para que detecte mejor y dar margen alrededor de la cara
+    env = os.environ.copy()
     if device == 'cpu':
-        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+        env['CUDA_VISIBLE_DEVICES'] = ''
 
     cmd = [
         'python3', 'inference.py',
         '--checkpoint_path', str(ckpt),
         '--face', str(face_video),
         '--audio', str(norm_audio),
-        '--outfile', str(out_path)
+        '--outfile', str(out_path),
+        '--static',                # trate la cara como fija (foto)
+        '--resize_factor', '2',    # reduce resolución → detector más estable en CPU
+        '--pads', '0', '15', '0', '0',  # margen arriba para no recortar labios
+        '--nosmooth'               # evitar smoothing que a veces rompe en CPU
     ]
     run(cmd, cwd=WAV2LIP)
     return out_path
+
