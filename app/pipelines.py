@@ -6,7 +6,6 @@ ROOT = Path('/workspace')
 SADTALKER = ROOT / 'SadTalker'
 WAV2LIP = ROOT / 'Wav2Lip'
 
-
 def sadtalker_generate(image: Path, audio: Path, out_dir: Path, fps: int = 25, device: str = 'cpu') -> Path:
     """Genera vídeo base desde imagen+audio con SadTalker."""
     ensure_dir(out_dir)
@@ -30,6 +29,34 @@ def sadtalker_generate(image: Path, audio: Path, out_dir: Path, fps: int = 25, d
         raise RuntimeError('SadTalker no produjo vídeo')
     return vids[0]
 
+def still_video_from_image(image: Path, audio: Path, out_dir: Path, fps: int = 25) -> Path:
+    """
+    Crea un vídeo estático a partir de una imagen con la misma duración que el audio.
+    Sirve como entrada para Wav2Lip cuando SadTalker falla/no está disponible.
+    """
+    ensure_dir(out_dir)
+    # Duración del audio con ffprobe vía ffmpeg (más robusto que cargarlo en Python)
+    # Generamos vídeo sin audio y con el fps deseado.
+    out_video = out_dir / 'still.mp4'
+    # Duración: usamos -stream_loop 1 + -t calculada por ffprobe, pero más simple:
+    # duplicamos frames hasta que acabe Wav2Lip (que usa el audio aparte). Tomamos 300s tope.
+    # Para mayor precisión, medimos duración real:
+    import json, subprocess
+    cmd = [
+        'ffprobe','-v','error','-show_entries','format=duration','-of','json', str(audio)
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    dur = float(json.loads(res.stdout)['format']['duration'])
+    # Generar vídeo estático
+    run([
+        'ffmpeg','-y',
+        '-loop','1','-i',str(image),
+        '-t',f'{dur:.3f}',
+        '-vf',f'fps={fps},format=yuv420p',
+        '-pix_fmt','yuv420p',
+        str(out_video)
+    ])
+    return out_video
 
 def wav2lip_refine(face_video: Path, audio: Path, out_path: Path, device: str = 'cpu') -> Path:
     """Refina sincronización labial con Wav2Lip."""
