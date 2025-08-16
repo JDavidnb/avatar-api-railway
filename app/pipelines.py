@@ -63,7 +63,7 @@ def normalize_face_video(face_video: Path, out_dir: Path, fps: int = 25) -> Path
     run([
         "ffmpeg","-y","-hide_banner","-loglevel","error",
         "-i", str(face_video),
-        "-vf", f"fps={fps},scale=iw:ih,format=yuv420p",
+        "-vf", f"fps={fps},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
         "-c:v","libx264","-preset","veryfast","-crf","18",
         "-an",
         str(out_face)
