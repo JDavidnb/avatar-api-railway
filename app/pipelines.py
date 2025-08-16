@@ -133,7 +133,7 @@ def wav2lip_refine_chunked(face_video: Path, audio: Path, out_path: Path, device
             '--face', str(v_seg),
             '--audio', str(a_seg),
             '--outfile', str(seg_out),
-            '--resize_factor','2',
+            '--resize_factor', '1' if device=='cuda' else '2',
             '--pads','0','15','0','0',
             '--wav2lip_batch_size','8',
             '--face_det_batch_size','1',
